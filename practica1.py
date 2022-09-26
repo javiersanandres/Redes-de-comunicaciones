@@ -23,6 +23,9 @@ TO_MS = 10
 num_paquete = 0
 TIME_OFFSET = 30*60
 
+#My global variables
+Nbytes =0
+
 def signal_handler(nsignal,frame):
 	logging.info('Control C pulsado')
 	if handle:
@@ -33,8 +36,18 @@ def procesa_paquete(us,header,data):
 	global num_paquete, pdumper
 	logging.info('Nuevo paquete de {} bytes capturado en el timestamp UNIX {}.{}'.format(header.len,header.ts.tv_sec,header.ts.tv_sec))
 	num_paquete += 1
+
 	#TODO imprimir los N primeros bytes
 	#Escribir el tráfico al fichero de captura con el offset temporal
+
+
+	for i in range(0, args.nbytes, 1):
+		print(hex(data[i]), end=' ')
+	print('\n')
+	
+
+
+
 	
 if __name__ == "__main__":
 	global pdumper,args,handle
@@ -63,6 +76,10 @@ if __name__ == "__main__":
 	pdumper = None
 	
 	#TODO abrir la interfaz especificada para captura o la traza
+
+	handle=pcap_open_offline(args.tracefile ,errbuf)
+
+
 	#TODO abrir un dumper para volcar el tráfico (si se ha especificado interfaz) 
 	
 	
@@ -75,6 +92,8 @@ if __name__ == "__main__":
 	elif ret == 0:
 		logging.debug('No mas paquetes o limite superado')
 	logging.info('{} paquetes procesados'.format(num_paquete))
-	#TODO si se ha creado un dumper cerrarlo
+
 	
+	#TODO si se ha creado un dumper cerrarlo
+	pcap_close(handle)
 
