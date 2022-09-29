@@ -40,11 +40,15 @@ def procesa_paquete(us,header,data):
 	#TODO imprimir los N primeros bytes
 	#Escribir el tráfico al fichero de captura con el offset temporal
 
-
-	for i in range(0, args.nbytes, 1):
+	#mymaxbytes = max(args.nbytes, header.caplen)
+	if args.nbytes> header.caplen:
+		mymaxbytes= header.caplen
+	else:
+		mymaxbytes= args.nbytes
+	for i in range(0, mymaxbytes, 1):
 		print(hex(data[i]), end=' ')
 	print('\n')
-	
+
 
 
 
@@ -84,7 +88,7 @@ if __name__ == "__main__":
 	
 	
 	
-	ret = pcap_loop(handle,50,procesa_paquete,None)
+	ret = pcap_loop(handle,-1,procesa_paquete,None)
 	if ret == -1:
 		logging.error('Error al capturar un paquete')
 	elif ret == -2:
@@ -96,3 +100,4 @@ if __name__ == "__main__":
 	
 	#TODO si se ha creado un dumper cerrarlo
 	pcap_close(handle)
+
