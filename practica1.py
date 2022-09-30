@@ -7,6 +7,7 @@
     2020 EPS-UAM
 '''
 
+from sqlite3 import Date
 from rc1_pcap import *
 import sys
 import binascii
@@ -23,8 +24,7 @@ TO_MS = 10
 num_paquete = 0
 TIME_OFFSET = 30*60
 
-#My global variables
-Nbytes =0
+0
 
 def signal_handler(nsignal,frame):
 	logging.info('Control C pulsado')
@@ -38,16 +38,18 @@ def procesa_paquete(us,header,data):
 	num_paquete += 1
 
 	#TODO imprimir los N primeros bytes
-	#Escribir el tráfico al fichero de captura con el offset temporal
-
-	#mymaxbytes = max(args.nbytes, header.caplen)
-	if args.nbytes> header.caplen:
-		mymaxbytes= header.caplen
-	else:
-		mymaxbytes= args.nbytes
+	
+	mymaxbytes = min(args.nbytes, header.caplen)
+	
 	for i in range(0, mymaxbytes, 1):
 		print(hex(data[i]), end=' ')
 	print('\n')
+
+	#Escribir el tráfico al fichero de captura con el offset temporal
+
+	if args.interface is not False:
+		
+		pcap_dump(pdumper, header, data)
 
 
 
@@ -80,11 +82,18 @@ if __name__ == "__main__":
 	pdumper = None
 	
 	#TODO abrir la interfaz especificada para captura o la traza
+	if args.tracefile is not False: 
+		handle=pcap_open_offline(args.tracefile ,errbuf)
+		#print( "Leemos de una traza")
+	else:
+		handle =pcap_open_live(args.interface,  ETH_FRAME_MAX  , NO_PROMISC, TO_MS,  errbuf ) 
 
-	handle=pcap_open_offline(args.tracefile ,errbuf)
+		#TODO abrir un dumper para volcar el tráfico (si se ha especificado interfaz) 
 
+		descr2= pcap_open_dead(DLT_EN10MB, ETH_FRAME_MAX)
+		pdumper= pcap_dump_open(descr2, 'captura.{}.{}.pcap'.format(args.interface, time.time()) )
 
-	#TODO abrir un dumper para volcar el tráfico (si se ha especificado interfaz) 
+	
 	
 	
 	
