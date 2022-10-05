@@ -1,0 +1,33 @@
+/*------------------------------------------------------------------*/
+/*                                                                  */
+/* Autores:     Javier San Andres      David Brenchley              */
+/*                                                                  */
+/*------------------------------------------------------------------*/
+
+
+Criterios de evalucion:
+------------------------------
+
+1) Normativa de entrega cumplida en su totalidad: REALIZADO -->  Todos los archivos entregados acorde con las especificaciones del enunciado.
+
+2) Contar paquetes de una traza: REALIZADO --> Hemos capturado trazas con wireshark, y las hemos cotejado con el resultado
+                                               de nuestro programa. Tambien hemos abierto trazas que habian sido capturadas
+                                               online, para asegurarnos que en ambos casos la salida era la misma.
+
+3) Contar paquetes de la red: REALIZADO --> Se han realizado numerosas capturas en vivo, asegurndo que el numero de paquetes contados era correcto.
+
+4) Almacenar en una traza el trafico capturado en vivo: REALIZADO -->   Se ha cotejado los datos que ha impreso con los datos mostrados al abrir 
+                                                                        el .pcap generado con wireshark. Esto se ha realizado con numeros capturas.
+
+5) Modificar fecha correctamente: Realizado:  REALIZADO:--> Al hace las capturas online, y abrirlas posteriormente desde wireshark, hemos comprobado que la fecha 
+                                                            de cada paquete estaba adelantada 30 mins respecto a la fecha de creacion de las capturas realizadas.                                                                 
+
+6) Imprimir los N primeros bytes de un paquete y validarlo con wireshark: REALIZADO --> Imprime los N primeros bytes y coinciden al abrir las capturas en wireshark
+
+
+NOTA IMAGEN:
+---------------------
+
+En la imagen (.png) se observa a la izquierda el archivo .pcap que se ha capturado online, y que hemos abierto con wireshark, mientras que a la derecha esta en la salida de la terminal 
+los 20 primeros bytes de los paquetes capturados. En la imagen se puede comprobar como los 20 primeros bytes del ultimo paquete impresos por pantalla, coinciden con los 20 primeros bytes
+del ultimo paquete de wireshark. Tambien puedes comprobar que la fecha de los paquetes se ha modificado por 30 mins (Compararlo con hora del ordenador, que es mas visual)
