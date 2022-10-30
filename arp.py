@@ -104,10 +104,20 @@ def processARPRequest(data:bytes,MAC:bytes)->None:
     if macorg != MAC:
         return
     
-    if ipdest !=myIP:
+    if ipdest !=struct.pack('!I',myIP):
+        
+        logging.debug('--------------------------')
+        logging.debug('---Mi comparacion de IPs---')
+        logging.debug(data[18:22])
+        logging.debug(struct.pack('!I',myIP))
+        logging.debug('--------------------------')
+        
         return
+    
+    
+        
     else:
-        frame=createARPReply(iporg,MAC)
+        frame=createARPReply(struct.unpack('!I',ipdest)[0],MAC)
         sendEthernetFrame(frame, len(frame), 0x0806 ,MAC)
 
 
@@ -152,7 +162,7 @@ def processARPReply(data:bytes,MAC:bytes)->None:
     if macorg != MAC:
         return
 
-    if ipdest!=myIP:
+    if ipdest!=struct.pack('!I',myIP):
         return
     
     else:
@@ -161,7 +171,7 @@ def processARPReply(data:bytes,MAC:bytes)->None:
             return
     
         resolvedMAC=MAC
-        cache[requestedIP]=MAC
+        cache[struct.unpack('!I',requestedIP)[0]]=MAC
         awaitingResponse=False
         requestedIP=None
     
@@ -230,10 +240,10 @@ def process_arp_frame(us:ctypes.c_void_p,header:pcap_pkthdr,data:bytes,srcMac:by
     if data[0:ARP_HLEN]!=ARPHeader:
         return
     
-    if data[6:8]==bytes[0x00,0x01]:
+    if data[6:8]==bytes([0x00,0x01]):
         processARPRequest(data[6:],srcMac)
         
-    elif data[6:8]==bytes[0x00,0x02]: 
+    elif data[6:8]==bytes([0x00,0x02]): 
         processARPReply(data[6:],srcMac) 
 
 
@@ -306,17 +316,15 @@ def ARPResolution(ip:int) -> bytes:
     with globalLock:
         
         awaitingResponse=True
-        requestedIP=ip
+        requestedIP=struct.pack('!I',ip)
         
         i=0
         while i<3 and awaitingResponse==True:
             sendEthernetFrame(frame, len(frame), 0x0806 ,broadcastAddr)
-            time.sleep(1)
+            time.sleep(0.5)
             i+=1
             
     if awaitingResponse==False:
         return resolvedMAC
     
-
-
     return None
