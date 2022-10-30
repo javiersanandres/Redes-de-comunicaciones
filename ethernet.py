@@ -25,6 +25,9 @@ broadcastAddr = bytes([0xFF]*6)
 #Diccionario que alamacena para un Ethertype dado qué función de callback se debe ejecutar
 upperProtos = {}
 
+#Por defecto, el nivel Ethernet no está inicializado
+levelInitialized = False
+
 def getHwAddr(interface:str):
     '''
         Nombre: getHwAddr
@@ -72,7 +75,7 @@ def process_Ethernet_frame(us:ctypes.c_void_p,header:pcap_pkthdr,data:bytes) -> 
 
     if DirEthdest == macAddress or DirEthdest == bytearray([0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF ]): 
  
-        if  Ethtype in upperProtos:
+        if  Ethtype in upperProtos.keys():
             f= upperProtos[Ethtype]
             f(us,header,data[14:],DirEthorg)
         return
@@ -174,7 +177,8 @@ def startEthernetLevel(interface:str) -> int:
             -Interface: nombre de la interfaz sobre la que inicializar el nivel Ethernet
         Retorno: 0 si todo es correcto, -1 en otro caso
     '''
-    global macAddress,handle,levelInitialized,recvThread, errbuf
+    global macAddress,handle,levelInitialized,recvThread
+    errbuf=bytearray()
     handle = None
     logging.debug('Función no implementada')
     #TODO: implementar aquí la inicialización de la interfaz y de las variables globales
@@ -242,19 +246,20 @@ def sendEthernetFrame(data:bytes,length:int,etherType:int,dstMac:bytes) -> int:
     logging.debug('Función no implementada')
     
     
-    etherType = struct.pack('!H',etherType)
-    cabeceraethydata= dstMac + macAddress + etherType + data
+
+    cabeceraethydata= dstMac + macAddress + struct.pack('!H',etherType) + data
     
     if length > 1514 -14:
         return -1
     elif length +14 < 60 :
-        ceros = list(repeat(0,60 - length -14))  
+        ceros = bytearray(repeat(0,60 - length -14))  
         cabeceraethydata=cabeceraethydata+ceros
 
 
     if pcap_inject(handle, cabeceraethydata, length +14 ) != (length+14):
         print('Error injectando data')
         return -1
+    
     
     return 0
         

@@ -7,7 +7,7 @@
 
 
 
-from msilib.schema import Error
+
 from ethernet import *
 import logging
 import socket
@@ -100,8 +100,8 @@ def processARPRequest(data:bytes,MAC:bytes)->None:
     if data[18:22]!=myIP:
         return
     else:
-        frame=createARPReply(data[8:12])
-        sendEthernetFrame(frame, len(frame), 0x0806 ,broadcastAddr)
+        frame=createARPReply(data[8:12],MAC)
+        sendEthernetFrame(frame, len(frame), 0x0806 ,MAC)
 
 
 
@@ -167,7 +167,7 @@ def createARPRequest(ip:int) -> bytes:
     frame = bytes()
     logging.debug('Función no implementada')
     #TODO implementar aqui
-    frame=ARPHeader+ bytearray[0x0001]+myMAC+myIP+broadcastAddr+ip
+    frame=ARPHeader+ bytearray([0x0001])+myMAC+struct.pack('!I',myIP)+broadcastAddr+struct.pack('!I',ip)
 
     return frame
 
@@ -186,7 +186,8 @@ def createARPReply(IP:int ,MAC:bytes) -> bytes:
     logging.debug('Función no implementada')
     #TODO implementar aqui
 
-    frame=ARPHeader+ bytearray[0x0002]+myMAC+myIP+MAC+IP
+    frame=ARPHeader+ bytearray([0x0002])+myMAC+struct.pack('!I',myIP)+MAC+struct.pack('!I',IP)
+
 
     return frame
 
@@ -217,10 +218,10 @@ def process_arp_frame(us:ctypes.c_void_p,header:pcap_pkthdr,data:bytes,srcMac:by
         return
     
     if data[6:8]==bytearray[0x0001]:
-        processARPRequest(data[8:])
+        processARPRequest(data[8:],srcMac)
         
     elif data[6:8]==bytearray[0x0002]: 
-        processARPReply(data[8:]) 
+        processARPReply(data[8:],srcMac) 
 
 
     return
@@ -301,7 +302,7 @@ def ARPResolution(ip:int) -> bytes:
             i+=1
             
     if awaitingResponse==False:
-         return resolvedMAC
+        return resolvedMAC
     
 
 
