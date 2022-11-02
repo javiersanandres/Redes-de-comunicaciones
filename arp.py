@@ -272,14 +272,11 @@ def initARP(interface:str) -> int:
     #upperProtos[0x0806]=process_arp_frame (mejor usar la función registerCallback)
     myMAC=getHwAddr(interface)
     myIP=getIP(interface)
-    
-    if arpInitialized==True:
-        logging.debug('ARP ya inicializado')
-        return 0
-    
+
     #tenemos que hacer un ARPRequest Gratuito
 
     if ARPResolution(myIP) is not None:
+        arpInitialized=False
         return -1
     else:
         arpInitialized=True

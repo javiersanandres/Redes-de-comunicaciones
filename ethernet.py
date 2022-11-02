@@ -215,7 +215,7 @@ def stopEthernetLevel()->int:
     '''
     logging.debug('Ejecutando stopEthernetLevel')
 
-    if levelInitialized != 1:
+    if levelInitialized != True:
         return -1
 
     else:
