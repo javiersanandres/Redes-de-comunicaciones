@@ -22,7 +22,7 @@ import socket
 
 
 if __name__ == "__main__":
-	global pdumper,args, handle, el, stop
+	global pdumper,args, el, stop
 	parser = argparse.ArgumentParser(description='Esta práctica ejecuta resoluciones ARP. Dada una dirección IP devuelve cual es la MAC asociada en la LAN actual',
 	formatter_class=RawTextHelpFormatter)
 	parser.add_argument('--itf', dest='interface', default=False,help='Interfaz a abrir')

@@ -35,7 +35,7 @@ def getHwAddr(interface:str):
         Argumentos:
             -interface: Cadena con el nombre de la interfaz
         Retorno:
-            -Dirección MAC de la itnerfaz
+            -Dirección MAC de la interfaz
     '''
     s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
     s.bind((interface,0))
@@ -65,15 +65,18 @@ def process_Ethernet_frame(us:ctypes.c_void_p,header:pcap_pkthdr,data:bytes) -> 
         Retorno:
             -Ninguno
     '''
-    logging.debug('Trama nueva. Función no implementada')
-
+    logging.debug('Trama nueva. Ejecutando Process_Ethernet_frame')
+    global macAddress
     #TODO: Implementar aquí el código que procesa una trama Ethernet en recepción
 
+    if data is None:
+        return 
+    
     DirEthdest= data[:6]
     DirEthorg= data [6:12]
     Ethtype = struct.unpack('!H',data[12:14])[0]
 
-    if DirEthdest == macAddress or DirEthdest == bytearray([0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF ]): 
+    if (DirEthdest == macAddress) or (DirEthdest == broadcastAddr): 
  
         if  Ethtype in upperProtos.keys():
             f= upperProtos[Ethtype]
@@ -155,12 +158,12 @@ def registerCallback(callback_func: Callable[[ctypes.c_void_p,pcap_pkthdr,bytes]
     global upperProtos
     #upperProtos es el diccionario que relaciona función de callback y ethertype
 
-    if callback_func is None:
+    if (callback_func is None) or (ethertype<0):
         return
     else:
         upperProtos[ethertype]=callback_func
 
-    logging.debug('Función no implementada')
+    logging.debug('Ejecutando registerCallback')
     
 
 def startEthernetLevel(interface:str) -> int:
@@ -180,9 +183,12 @@ def startEthernetLevel(interface:str) -> int:
     global macAddress,handle,levelInitialized,recvThread
     errbuf=bytearray()
     handle = None
-    logging.debug('Función no implementada')
+    logging.debug('Ejecutando startEthernetLevel')
     #TODO: implementar aquí la inicialización de la interfaz y de las variables globales
 
+    if not interface:
+        return -1
+    
     if levelInitialized==True:
         return -1
     else:
@@ -213,9 +219,9 @@ def stopEthernetLevel()->int:
         Argumentos: Ninguno
         Retorno: 0 si todo es correcto y -1 en otro caso
     '''
-    logging.debug('Función no implementada')
+    logging.debug('Ejecutando stopEthernetLevel')
 
-    if levelInitialized != 1:
+    if levelInitialized != True:
         return -1
 
     else:
@@ -243,20 +249,21 @@ def sendEthernetFrame(data:bytes,length:int,etherType:int,dstMac:bytes) -> int:
         Retorno: 0 si todo es correcto, -1 en otro caso
     '''
     global macAddress,handle
-    logging.debug('Función no implementada')
+    logging.debug('Ejecutando sendEthernetFrame')
     
-    
+    if (data is None) or (length<0) or (etherType<0) or (dstMac is None):
+        return -1
 
     cabeceraethydata= dstMac + macAddress + struct.pack('!H',etherType) + data
     
-    if length > 1514 -14:
+    if len(cabeceraethydata)>ETH_FRAME_MAX:
         return -1
-    elif length +14 < 60 :
-        ceros = bytearray(repeat(0,60 - length -14))  
+    elif len(cabeceraethydata)< 60 :
+        ceros = bytes([0])*(ETH_FRAME_MIN-len(cabeceraethydata)) 
         cabeceraethydata=cabeceraethydata+ceros
 
 
-    if pcap_inject(handle, cabeceraethydata, length +14 ) != (length+14):
+    if pcap_inject(handle, cabeceraethydata, len(cabeceraethydata) ) != (len(cabeceraethydata)):
         print('Error injectando data')
         return -1
     
