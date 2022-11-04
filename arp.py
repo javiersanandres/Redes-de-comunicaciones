@@ -96,6 +96,9 @@ def processARPRequest(data:bytes,MAC:bytes)->None:
     #TODO implementar aquí
     global myIP
     
+    if (data is None) or (MAC is None):
+        return 
+    
     macorg=data[2:8]  
     iporg=data[8:12]
     macdest=data[12:18]
@@ -117,8 +120,9 @@ def processARPRequest(data:bytes,MAC:bytes)->None:
     
         
     else:
-        frame=createARPReply(struct.unpack('!I',ipdest)[0],MAC)
-        sendEthernetFrame(frame, len(frame), 0x0806 ,MAC)
+        frame=createARPReply(struct.unpack('!I',iporg)[0],MAC)
+        if sendEthernetFrame(frame, len(frame), 0x0806 ,MAC) <0:
+            return -1
 
 
 
@@ -154,6 +158,9 @@ def processARPReply(data:bytes,MAC:bytes)->None:
     #TODO implementar aquí
     global myIP
     
+    if (data is None) or (MAC is None):
+        return 
+    
     macorg=data[2:8]  
     iporg=data[8:12]
     macdest=data[12:18]
@@ -173,7 +180,9 @@ def processARPReply(data:bytes,MAC:bytes)->None:
         resolvedMAC=MAC
         cache[struct.unpack('!I',requestedIP)[0]]=MAC
         awaitingResponse=False
-        requestedIP=None
+        
+        with globalLock:
+            requestedIP=None
     
     return 
 
@@ -187,10 +196,14 @@ def createARPRequest(ip:int) -> bytes:
         Retorno: Bytes con el contenido de la trama de petición ARP
     '''
     global myMAC,myIP
+    
+    if ip<0:
+        return 
+    
     frame = bytes()
     logging.debug('Ejecutando createARPRequest')
     #TODO implementar aqui
-    frame=ARPHeader+ bytes([0x00,0x01])+myMAC+struct.pack('!I',myIP)+broadcastAddr+struct.pack('!I',ip)
+    frame=ARPHeader+ bytes([0x00,0x01])+myMAC+struct.pack('!I',myIP)+bytes([0x00]*6)+struct.pack('!I',ip)
 
     return frame
 
@@ -205,6 +218,10 @@ def createARPReply(IP:int ,MAC:bytes) -> bytes:
         Retorno: Bytes con el contenido de la trama de petición ARP
     '''
     global myMAC,myIP
+    
+    if (IP<0) or (MAC is None):
+        return 
+    
     frame = bytes()
     logging.debug('Ejecutando createARPReply')
     #TODO implementar aqui
@@ -237,13 +254,18 @@ def process_arp_frame(us:ctypes.c_void_p,header:pcap_pkthdr,data:bytes,srcMac:by
     logging.debug('Ejecutando process_arp_frame')
     #TODO implementar aquí
     
+    if (data is None) or (srcMac is None):
+        return 
+    
+    opcode=data[6:8]
+    
     if data[0:ARP_HLEN]!=ARPHeader:
         return
     
-    if data[6:8]==bytes([0x00,0x01]):
+    if opcode==bytes([0x00,0x01]):
         processARPRequest(data[6:],srcMac)
         
-    elif data[6:8]==bytes([0x00,0x02]): 
+    elif opcode==bytes([0x00,0x02]): 
         processARPReply(data[6:],srcMac) 
 
 
@@ -268,6 +290,10 @@ def initARP(interface:str) -> int:
     global myIP,myMAC,arpInitialized
     logging.debug('Ejecutando initARP')
     #TODO implementar aquí
+    
+    if not interface:
+        return -1 
+    
     registerCallback(process_arp_frame, 0x0806)
     #upperProtos[0x0806]=process_arp_frame (mejor usar la función registerCallback)
     myMAC=getHwAddr(interface)
@@ -276,6 +302,7 @@ def initARP(interface:str) -> int:
     #tenemos que hacer un ARPRequest Gratuito
 
     if ARPResolution(myIP) is not None:
+        logging.debug('La IP ya esta en uso')
         arpInitialized=False
         return -1
     else:
@@ -305,9 +332,12 @@ def ARPResolution(ip:int) -> bytes:
     '''
     global requestedIP,awaitingResponse,resolvedMAC
     logging.debug('Ejecutando ARPResolution')
+    
+    if ip<0:
+        return None
  
     #TODO implementar aquí
-    if ip in cache.keys():
+    if cache.get(ip) is not None:
         return cache[ip]
 
     frame=createARPRequest(ip)
@@ -320,11 +350,12 @@ def ARPResolution(ip:int) -> bytes:
         
         i=0
         while i<3 and awaitingResponse==True:
-            sendEthernetFrame(frame, len(frame), 0x0806 ,broadcastAddr)
+            if sendEthernetFrame(frame, len(frame), 0x0806 ,broadcastAddr) < 0:
+                return None
             time.sleep(0.5)
             i+=1
             
-    if awaitingResponse==False:
-        return resolvedMAC
+        if awaitingResponse==False:
+            return resolvedMAC
     
     return None

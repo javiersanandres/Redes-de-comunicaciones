@@ -69,6 +69,9 @@ def process_Ethernet_frame(us:ctypes.c_void_p,header:pcap_pkthdr,data:bytes) -> 
     global macAddress
     #TODO: Implementar aquí el código que procesa una trama Ethernet en recepción
 
+    if data is None:
+        return 
+    
     DirEthdest= data[:6]
     DirEthorg= data [6:12]
     Ethtype = struct.unpack('!H',data[12:14])[0]
@@ -155,7 +158,7 @@ def registerCallback(callback_func: Callable[[ctypes.c_void_p,pcap_pkthdr,bytes]
     global upperProtos
     #upperProtos es el diccionario que relaciona función de callback y ethertype
 
-    if callback_func is None:
+    if (callback_func is None) or (ethertype<0):
         return
     else:
         upperProtos[ethertype]=callback_func
@@ -183,6 +186,9 @@ def startEthernetLevel(interface:str) -> int:
     logging.debug('Ejecutando startEthernetLevel')
     #TODO: implementar aquí la inicialización de la interfaz y de las variables globales
 
+    if not interface:
+        return -1
+    
     if levelInitialized==True:
         return -1
     else:
@@ -245,18 +251,19 @@ def sendEthernetFrame(data:bytes,length:int,etherType:int,dstMac:bytes) -> int:
     global macAddress,handle
     logging.debug('Ejecutando sendEthernetFrame')
     
-    
+    if (data is None) or (length<0) or (etherType<0) or (dstMac is None):
+        return -1
 
     cabeceraethydata= dstMac + macAddress + struct.pack('!H',etherType) + data
     
-    if length > 1514 -14:
+    if len(cabeceraethydata)>ETH_FRAME_MAX:
         return -1
-    elif length +14 < 60 :
-        ceros = bytes(repeat(0,60 - length -14))  
+    elif len(cabeceraethydata)< 60 :
+        ceros = bytes([0])*(ETH_FRAME_MIN-len(cabeceraethydata)) 
         cabeceraethydata=cabeceraethydata+ceros
 
 
-    if pcap_inject(handle, cabeceraethydata, length +14 ) != (length+14):
+    if pcap_inject(handle, cabeceraethydata, len(cabeceraethydata) ) != (len(cabeceraethydata)):
         print('Error injectando data')
         return -1
     

@@ -1,0 +1,39 @@
+AUTORES--> David Brenchley -Javier San Andrés
+
+1) Normativa de entrega cumplida en su totalidad-> 	Hemos dado respuesta a todos lo apartados 
+								   	y hemos realizado las correspondientes comprobaciones
+
+
+
+2) Recibir tramas internet-> 	Realizado, se ha comprobado a traves de mininet y con el uso de wireshark
+					que las tramas ethernet se leen correctamente, y que la funcion de atencion
+					al paquete (en este caso ARP) se guarda correctamente en el diccionario upperProtos
+
+
+
+
+3) Enviar tramas internet-> 	Realizado, se ha aplicado la misma metodologia usada para la comprobacion del correcto 
+					funcionamiento del apartado anterior
+
+
+
+4) Enviar, 5) Procesar  peticiones  ARP-> Realizados, a traves de mininet se ha simulado la interaccion de dos nodos h1 y h2
+							se han inicializado los ARP y se ha requisado las macs de los nodos contrarios (h2 para h1 y h1 para h2).
+							Se ha comprobado que los paquetes recibidos eran procesado correctamente mediante loggings y apoyandonos
+							una vez mas en Wireshark.
+
+
+6) Enviar, 7) Procesar respuestas ARP-> 	Realizados, igual que el apartado anterior y usando ifconfig en la terminal se ha verificado que las 
+							respuestas recibidas eran correctas, correspondiendose a las esperadas
+
+
+8) Lock -> Se ha implementado en ARPResolution correctamente, para asegurar que las variables globales requestedIP,awaitingResponse,resolvedMAC estaban protegidas 
+						
+9) Cache -> Realizado y comprobado
+
+10) ARP Gratuito-> Realizado y comprobado cambiando las ips en ifconfig,  ademas de Wireshark
+
+
+Todo el proceso de testeo se ha capturado en imagenes, que hemos añadio en el ZIP
+
+NOTA IMAGENES-> Donde hay aa.aa.aa.aa.aa.aa deberia haber, 00.00.00.00.00.00.  Las "a"s estan porque las usamos para identificar mejor NUESTROS paquetes ARP Request
