@@ -157,13 +157,13 @@ def registerCallback(callback_func: Callable[[ctypes.c_void_p,pcap_pkthdr,bytes]
     '''
     global upperProtos
     #upperProtos es el diccionario que relaciona función de callback y ethertype
-
+    logging.debug('Ejecutando registerCallback')
+    
     if (callback_func is None) or (ethertype<0):
         return
     else:
         upperProtos[ethertype]=callback_func
 
-    logging.debug('Ejecutando registerCallback')
     
 
 def startEthernetLevel(interface:str) -> int:

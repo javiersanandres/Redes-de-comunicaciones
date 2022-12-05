@@ -219,7 +219,7 @@ def registerIPProtocol(callback,protocol):
 
 
 def initIP(interface,opts=None):
-    global myIP, MTU, netmask, defaultGW,ipOpts, IPID
+    global myIP, MTU, netmask, defaultGW, ipOpts, IPID
     '''
         Nombre: initIP
         Descripción: Esta función inicializará el nivel IP. Esta función debe realizar, al menos, las siguientes tareas:
@@ -244,21 +244,25 @@ def initIP(interface,opts=None):
     MTU=getMTU(interface)
     netmask=getNetmask(interface)
     defaultGW=getDefaultGW(interface)
-    
-    length=len(ipOpts)
-    if length/4 or length>40:
-        logging.error('Tamaño de opciones inválido')
-        return False
-    
-    ipOpts=opts
+
+
+    if opts is not None:
+        ipOpts=opts
+        length=len(ipOpts)
+        if length/4 or length>40:
+            logging.error('Tamaño de opciones inválido')
+            return False
+    else:
+        ipOpts=None
     
     registerCallback(process_IP_datagram, 0x0800)
     IPID=11
+    
     return True
     
 
 def sendIPDatagram(dstIP,data,protocol):
-    global IPID, MTU, opts, myIP
+    global IPID, MTU, ipOpts, myIP, netmask, defaultGW
     '''
         Nombre: sendIPDatagram
         Descripción: Esta función construye un datagrama IP y lo envía. En caso de que los datos a enviar sean muy grandes la función
@@ -283,41 +287,58 @@ def sendIPDatagram(dstIP,data,protocol):
           
     '''
     logging.debug('Enviando datagrama IP...')
-    ip_header_init = bytes()
-    temp=bytes()
+    ip_header_init = bytearray()
+    temp=bytearray()
     ip_header=[]
        
     if data is None and protocol is None:
         return False
     
     
-    if opts is None:
-        ip_header_init=bytes([0x45])+bytes([0x16])
+    if ipOpts is None:
+        ip_header_init=bytearray([0x45, 0x16])
+        ip_header_final=bytearray([128, protocol, 0x00, 0x00])+struct.pack('!I', myIP)+struct.pack('!I', dstIP)
     else:
-        ip_header_init=bytes([0x40 | (20+len(opts))/4])+bytes([0x16])
-    
-    ip_header_final=bytes([128])+bytes([protocol])+bytes([0x00, 0x00])+struct.pack('!I', myIP)+struct.pack('!I', dstIP)+opts
+        ip_header_init=bytearray([0x40 | (20+len(ipOpts))/4, 0x16])
+        ip_header_final=bytearray([128, protocol, 0x00, 0x00])+struct.pack('!I', myIP)+struct.pack('!I', dstIP)+ipOpts
+       
     
     length=len(data)
     if length<=MTU-20:
-        ip_header_init+=struct.pack('H', length+(ip_header_init[0] & 0x0F))+struct.pack('H', IPID)+bytes([0x00])+bytes([128])+ip_header_final
-        ip_header_init[10:12]=struct.pack('!H', chksum(ip_header_init))
+        ip_header_init+=struct.pack('H', length+(ip_header_init[0] & 0x0F))+struct.pack('H', IPID)+bytearray([0x00, 128])+ip_header_final
+        checksum=struct.pack('!H', chksum(ip_header_init))
+        ip_header_init[10]=checksum[0]
+        ip_header_init[11]=checksum[1]
         ip_header.append(ip_header_init)
     else:
         max_length=(MTU-20)-(MTU-20)%8
         i=0
         offset=0
         while length-max_length>0:
-            temp=ip_header_init+struct.pack('H', max_length+(ip_header_init[0] & 0x0F))+struct.pack('H', IPID+i)+bytes([0x20 | offset])+ip_header_final
-            temp[10:12]=struct.pack('!H', chksum(temp))
+            temp=ip_header_init+struct.pack('H', max_length+(ip_header_init[0] & 0x0F))+struct.pack('H', IPID)+bytes([0x20 | offset])+ip_header_final
+            checksum=struct.pack('!H', chksum(temp))
+            temp[10]=checksum[0]
+            temp[11]=checksum[1]
             ip_header.append(temp+data[offset*8:offset*8+max_length])
             length-=max_length
             offset+=max_length/8
             i+=1
-        temp=ip_header_init+struct.pack('H', length+(ip_header_init[0] & 0x0F))+struct.pack('H', IPID+i)+bytes([offset])+ip_header_final
-        temp[10:12]=struct.pack('!H', chksum(temp))
+        temp=ip_header_init+struct.pack('H', length+(ip_header_init[0] & 0x0F))+struct.pack('H', IPID)+bytes([offset])+ip_header_final
+        checksum=struct.pack('!H', chksum(temp))
+        temp[10]=checksum[0]
+        temp[11]=checksum[1]
         ip_header.append(temp+data[offset*8:offset*8+length])
-        
+    
+    if (dstIP & netmask) != (myIP & netmask):
+        dstMac=ARPResolution(defaultGW)
+    else:
+        dstMac=ARPResolution(dstIP)
+    
+    for i in range(0, len(ip_header)):
+        if sendEthernetFrame(ip_header[i], struct.unpack('H', ip_header[i][2:4]), 0x0800, dstMac)==-1:
+            return False
+    IPID+=1
+
     return True
     
     

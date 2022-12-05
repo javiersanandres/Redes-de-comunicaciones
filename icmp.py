@@ -47,6 +47,33 @@ def process_ICMP_message(us,header,data,srcIp):
         Retorno: Ninguno
           
     '''
+    logging.debug('Procesando mensaje ICMP...')
+    if data is None or header is None:
+        logging.error('No se han mandado datos o no se ha especificado cabecera')
+        return
+    
+    if chksum(data) != 0:
+        logging.error('El checksum no es correcto')
+        return
+    
+    type=data[0]
+    code=data[1]
+    icmp_id=struct.unpack('H', data[4:6])[0]
+    icmp_seqnum=struct.unpack('H', data[6:8])[0]
+    logging.debug('Valor de tipo: {}'.format(type.hex()))
+    logging.debug('Código: {}'.format(code.hex()))
+    
+    if type==ICMP_ECHO_REQUEST_TYPE:
+        if sendICMPMessage(data[8:], ICMP_ECHO_REPLY_TYPE, code, icmp_id, icmp_seqnum, srcIp)==False:
+            logging.error('Error mandando mensaje ICMP')
+            return
+        
+    elif type==ICMP_ECHO_REPLY_TYPE:
+        with timeLock:
+            RTT=icmp_send_times[srcIp+icmp_id+icmp_seqnum]
+            RTT-=header.ts
+            logging.debug('RTT aproximado: {}'.format(RTT))
+
     
 
 def sendICMPMessage(data,type,code,icmp_id,icmp_seqnum,dstIP):
@@ -78,8 +105,34 @@ def sendICMPMessage(data,type,code,icmp_id,icmp_seqnum,dstIP):
         Retorno: True o False en función de si se ha enviado el mensaje correctamente o no
           
     '''
-  
-    icmp_message = bytes()
+    logging.debug('Enviando mensaje ICMP...')
+    icmp_message = bytearray()
+    
+    
+    if type==ICMP_ECHO_REPLY_TYPE or type==ICMP_ECHO_REQUEST_TYPE:
+        
+        icmp_message=bytearray([type, code])+bytearray([0x00]*2)+struct.pack('H', icmp_id)+struct.pack('H', icmp_seqnum)+data
+        checksum=struct.pack('!H', chksum(icmp_message))
+        
+        icmp_message[1]=checksum[0]
+        icmp_message[2]=checksum[1]
+        
+        with timeLock:
+            if type==ICMP_ECHO_REQUEST_TYPE:
+                icmp_send_times[dstIP+icmp_id+icmp_seqnum]=time.time()
+                
+    else:
+        logging.error('Tipo no soportado')
+        return False
+
+    if len(icmp_message)%2:
+        icmp_message+=bytes[0x00]
+        
+    if sendIPDatagram(dstIP, icmp_message, 1)==False:
+        logging.error('Error enviando datagrama IP')
+        return False
+   
+    return True
    
 def initICMP():
     '''
@@ -93,3 +146,7 @@ def initICMP():
         Retorno: Ninguno
           
     '''
+    logging.debug('Registrando process_ICMP_message...')
+    
+    registerIPProtocol(process_ICMP_message, 1)
+    
