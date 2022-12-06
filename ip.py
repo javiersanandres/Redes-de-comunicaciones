@@ -154,15 +154,12 @@ def process_IP_datagram(us,header,data,srcMac):
     
     if (flags & 0x02) != 0 or (flags & 0x04):
         logging.error('Flags no válidas')
-        return
     
     if version != 4:
-    	logging.error('Version {} no reconocida'.format(version))
-    	return
+        logging.error('Version {} no reconocida'.format(version))
     
     if type_of_service != 0x16:
         logging.error('No se reconoce el tipo de servicio')
-        return
     
     if IHL<IP_MIN_HLEN or IHL>IP_MAX_HLEN:
         logging.error('Tamaño de cabecera IP incorrecto')
@@ -192,22 +189,29 @@ def process_IP_datagram(us,header,data,srcMac):
     if identification not in headers.keys():
         headers[identification]={}
         headers[identification][offset]=data[IHL:]
-
-    elif identification in headers.keys():
-        headers[identification][offset]=data[IHL:]
+        headers[identification][-1]=0
 
         if (flags & 0x01)==0:
+            headers[identification][-1]=1
+
+    elif identification in headers.keys():
+
+        headers[identification][offset]=data[IHL:]
+
+        if (flags & 0x01)==0 or headers[identification][-1]==1:
+            
             sorted_keys=sorted(headers[identification])
 
-            offset_controller=sorted_keys[1]-sorted_keys[0]
+            offset_controller=len(headers[identification][sorted_keys[1]])
 
-            if all([(sorted_keys[i+1]-sorted_keys[i])==offset_controller for i in range(1, len(sorted_keys)-1)]):
+            if sorted_keys[1]==0 and all([(sorted_keys[i+1]-sorted_keys[i])==offset_controller for i in range(1, len(sorted_keys)-1)]):
+                
                 aux=bytes()
-                for i in sorted_keys:
+                for i in sorted_keys[1:]:
                     aux+=headers[identification][i]
                 del headers[identification]
 
-            protocols[protocol](us, header, aux, srcIP)
+                protocols[protocol](us, header, aux, srcIP)
 
     return
     
@@ -362,7 +366,6 @@ def sendIPDatagram(dstIP,data,protocol):
 
             length-=max_length
             offset+=max_length//8
-            logging.debug(offset)
             i+=1
 
         temp=ip_header_init+struct.pack('!H', length+((ip_header_init[0] & 0x0F)<<2))+struct.pack('!H', IPID)+struct.pack('!H', offset)+ip_header_final
@@ -378,11 +381,17 @@ def sendIPDatagram(dstIP,data,protocol):
         dstMac=ARPResolution(defaultGW)
     else:
         dstMac=ARPResolution(dstIP)
+
+    if dstMac is None:
+        logging.error('No se ha encontrado dirección MAC para dicha dirección IP')
+        return False
+    
     
     for i in range(0, len(ip_header)):
         if sendEthernetFrame(ip_header[i], struct.unpack('!H', ip_header[i][2:4])[0], 0x0800, dstMac)==-1:
+            logging.error('Error enviando datagrama a nivel Ethernet')
             return False
-    
+        
     IPID+=1
 
     return True

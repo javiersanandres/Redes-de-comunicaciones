@@ -27,6 +27,8 @@ ipTstampOption =	bytes([68,12,13,0x01,10,0,0,3])
 
 if __name__ == "__main__":
 	ICMP_SEQNUM = 0
+	ICMP_ID=11
+	
 	parser = argparse.ArgumentParser(description='Envía datagramas UDP o mensajes ICMP con diferentes opciones',
 	formatter_class=RawTextHelpFormatter)
 	parser.add_argument('--itf', dest='interface', default=False,help='Interfaz a abrir')

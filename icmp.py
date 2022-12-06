@@ -58,10 +58,10 @@ def process_ICMP_message(us,header,data,srcIp):
     
     type=data[0]
     code=data[1]
-    icmp_id=struct.unpack('H', data[4:6])[0]
-    icmp_seqnum=struct.unpack('H', data[6:8])[0]
-    logging.debug('Valor de tipo: {}'.format(type.hex()))
-    logging.debug('Código: {}'.format(code.hex()))
+    icmp_id=struct.unpack('!H', data[4:6])[0]
+    icmp_seqnum=struct.unpack('!H', data[6:8])[0]
+    logging.debug('Valor de tipo: {}'.format(type))
+    logging.debug('Código: {}'.format(code))
     
     if type==ICMP_ECHO_REQUEST_TYPE:
         if sendICMPMessage(data[8:], ICMP_ECHO_REPLY_TYPE, code, icmp_id, icmp_seqnum, srcIp)==False:
@@ -70,9 +70,12 @@ def process_ICMP_message(us,header,data,srcIp):
         
     elif type==ICMP_ECHO_REPLY_TYPE:
         with timeLock:
-            RTT=icmp_send_times[srcIp+icmp_id+icmp_seqnum]
-            RTT-=header.ts
-            logging.debug('RTT aproximado: {}'.format(RTT))
+            if (srcIp+icmp_id+icmp_seqnum) in icmp_send_times.keys():
+                RTT=-icmp_send_times[srcIp+icmp_id+icmp_seqnum]
+                RTT+=header.ts.tv_sec+header.ts.tv_usec*(10**(-6))
+                logging.debug('RTT aproximado: {}'.format(RTT))
+            else:
+                logging.error('No se ha encontrado esa clave para el diccionario')
 
     
 
@@ -111,11 +114,11 @@ def sendICMPMessage(data,type,code,icmp_id,icmp_seqnum,dstIP):
     
     if type==ICMP_ECHO_REPLY_TYPE or type==ICMP_ECHO_REQUEST_TYPE:
         
-        icmp_message=bytearray([type, code])+bytearray([0x00]*2)+struct.pack('H', icmp_id)+struct.pack('H', icmp_seqnum)+data
-        checksum=struct.pack('!H', chksum(icmp_message))
+        icmp_message=bytearray([type, code])+bytearray([0x00]*2)+struct.pack('!H', icmp_id)+struct.pack('!H', icmp_seqnum)+data
+        checksum=struct.pack('H', chksum(icmp_message))
         
-        icmp_message[1]=checksum[0]
-        icmp_message[2]=checksum[1]
+        icmp_message[2]=checksum[0]
+        icmp_message[3]=checksum[1]
         
         with timeLock:
             if type==ICMP_ECHO_REQUEST_TYPE:
@@ -126,7 +129,7 @@ def sendICMPMessage(data,type,code,icmp_id,icmp_seqnum,dstIP):
         return False
 
     if len(icmp_message)%2:
-        icmp_message+=bytes[0x00]
+        icmp_message+=bytes([0x00])
         
     if sendIPDatagram(dstIP, icmp_message, 1)==False:
         logging.error('Error enviando datagrama IP')
