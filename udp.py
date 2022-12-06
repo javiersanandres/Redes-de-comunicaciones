@@ -63,7 +63,7 @@ def process_UDP_datagram(us,header,data,srcIP):
     logging.debug('{}\n\n'.format(string))
 
     #logging.debug('Datos contenidos:{}\n\n'.format(data[8:length].hex()))
-    
+    return
 
 
 def sendUDPDatagram(data,dstPort,dstIP):

@@ -132,7 +132,6 @@ def process_IP_datagram(us,header,data,srcMac):
         logging.error('La cabecera, el datagrama o la mac de origen son None')
         return
     
-
     version=(data[0] & 0xF0) >> 4  
     IHL= (data[0] & 0x0F) << 2
     type_of_service=data[1]
@@ -167,6 +166,7 @@ def process_IP_datagram(us,header,data,srcMac):
     
     if IHL<IP_MIN_HLEN or IHL>IP_MAX_HLEN:
         logging.error('Tamaño de cabecera IP incorrecto')
+        return
         
     
     
@@ -184,22 +184,32 @@ def process_IP_datagram(us,header,data,srcMac):
         logging.error('El protocolo no ha sido registrado')
         return
 
-    if (flags & 0x01)==1 and offset==0:
-        headers[IPID]=data[IHL:IHL+8]
+    if (flags & 0x01)==0 and offset==0:
         protocols[protocol](us, header, data[IHL:], srcIP)
+        return
 
-    elif IPID in headers.keys():
-        aux=headers[IPID]
+
+    if identification not in headers.keys():
+        headers[identification]={}
+        headers[identification][offset]=data[IHL:]
+
+    elif identification in headers.keys():
+        headers[identification][offset]=data[IHL:]
 
         if (flags & 0x01)==0:
-            del headers[IPID]
+            sorted_keys=sorted(headers[identification])
 
-        protocols[protocol](us, header, aux+data[IHL:], srcIP)
+            offset_controller=sorted_keys[1]-sorted_keys[0]
 
-    else:
-        protocols[protocol](us, header, data[IHL:], srcIP)
+            if all([(sorted_keys[i+1]-sorted_keys[i])==offset_controller for i in range(1, len(sorted_keys)-1)]):
+                aux=bytes()
+                for i in sorted_keys:
+                    aux+=headers[identification][i]
+                del headers[identification]
 
+            protocols[protocol](us, header, aux, srcIP)
 
+    return
     
 
 def registerIPProtocol(callback,protocol):
@@ -268,7 +278,7 @@ def initIP(interface,opts=None):
     if opts is not None:
         ipOpts=opts
         length=len(ipOpts)
-        if length/4 or length>40:
+        if length%4 or length>40:
             logging.error('Tamaño de opciones inválido')
             return False
     else:
@@ -310,7 +320,7 @@ def sendIPDatagram(dstIP,data,protocol):
     temp=bytearray()
     ip_header=[]
        
-    if data is None and protocol is None:
+    if data is None or protocol is None:
         return False
     
     if ipOpts is None:
@@ -340,7 +350,7 @@ def sendIPDatagram(dstIP,data,protocol):
         i=0
         offset=0
 
-        while (length+8)-max_length>0:
+        while length-max_length>0:
 
             temp=ip_header_init+struct.pack('!H', max_length+((ip_header_init[0] & 0x0F) << 2))+struct.pack('!H', IPID)+struct.pack('!H', (0x20 << 8) | offset)+ip_header_final
 
