@@ -75,7 +75,7 @@ if __name__ == "__main__":
 	
 	while True:
 		try:
-			msg = input('\n\t0x16\n\tIntroduzca opcion:\n\t1.Enviar ping\n\t2.Enviar datagrama UDP:')
+			msg = input('\n\t0x16\n\tIntroduzca opcion:\n\t1.Enviar ping\n\t2.Enviar datagrama UDP: ')
 			if msg == 'q':
 				break
 			elif msg == '1':

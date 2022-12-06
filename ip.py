@@ -14,6 +14,10 @@ SIOCGIFNETMASK = 0x891b
 #Diccionario de protocolos. Las claves con los valores numéricos de protocolos de nivel superior a IP
 #por ejemplo (1, 6 o 17) y los valores son los nombres de las funciones de callback a ejecutar.
 protocols={}
+
+#Diccionario de cabeceras en caso de fragmentación
+headers={}
+
 #Tamaño mínimo de la cabecera IP
 IP_MIN_HLEN = 20
 #Tamaño máximo de la cabecera IP
@@ -128,33 +132,34 @@ def process_IP_datagram(us,header,data,srcMac):
         logging.error('La cabecera, el datagrama o la mac de origen son None')
         return
     
-    version=data[0] & 0xF0
+
+    version=(data[0] & 0xF0) >> 4  
     IHL= (data[0] & 0x0F) << 2
     type_of_service=data[1]
-    total_length=data[2:4]
-    identification=struct.unpack('H', data[4:6])[0]
-    flags=data[6] & 0xE0
+    total_length=struct.unpack('!H', data[2:4])[0]
+    identification=struct.unpack('!H', data[4:6])[0]
+    flags=(data[6] & 0xE0) >> 5
     offset=((data[6] & 0x1F) << 8 | data[7]) << 3
     time_to_live=data[8]
     protocol=data[9]
     header_checksum=struct.unpack('!H', data[10:12])[0]
-    srcIP=struct.unapck('!I', data[12:16])[0]
+    srcIP=struct.unpack('!I', data[12:16])[0]
     destIP=struct.unpack('!I', data[16:20])[0]
     
     if IHL>IP_MIN_HLEN:
         options=data[20:IHL]
     
-    if header_checksum != 0:
+    if chksum(data[:IHL]) != 0:
         logging.error('Error en el checksum')
-        return
+        return     
     
     if (flags & 0x02) != 0 or (flags & 0x04):
         logging.error('Flags no válidas')
         return
     
     if version != 4:
-        logging.error('Versión no reconocida')
-        return
+    	logging.error('Version {} no reconocida'.format(version))
+    	return
     
     if type_of_service != 0x16:
         logging.error('No se reconoce el tipo de servicio')
@@ -165,23 +170,37 @@ def process_IP_datagram(us,header,data,srcMac):
         
     
     
-    logging.debug('Longitud de la cabecera IP: {}¡'.format(IHL.hex()))
-    logging.debug('IPID: {}'.format(IHL.hex()))
-    logging.debug('TTL: {}'.format(time_to_live.hex()))
+    logging.debug('Longitud de la cabecera IP: {}'.format(IHL))
+    logging.debug('IPID: {}'.format(identification))
+    logging.debug('TTL: {}'.format(time_to_live))
     logging.debug('DF={} y MF={}'.format(flags & 0x02, flags & 0x01))
-    logging.debug('Valor de offset: {}'.format(offset.hex()))
-    logging.debug('IP Origen: {}'.format(srcIP))
-    logging.debug('IP Destino: {}'.format(destIP))
-    logging.debug('Protocolo: {}'.format(protocol.hex()))
+    logging.debug('Valor de offset: {}'.format(offset))
+    logging.debug('IP Origen: {}.{}.{}.{}'.format(data[12],data[13], data[14], data[15]))
+    logging.debug('IP Destino: {}.{}.{}.{}'.format(data[16],data[17], data[18], data[19]))
+    logging.debug('Protocolo: {}'.format(protocol))
+
 
     if protocol not in protocols.keys():
         logging.error('El protocolo no ha sido registrado')
         return
+
+    if (flags & 0x01)==1 and offset==0:
+        headers[IPID]=data[IHL:IHL+8]
+        protocols[protocol](us, header, data[IHL:], srcIP)
+
+    elif IPID in headers.keys():
+        aux=headers[IPID]
+
+        if (flags & 0x01)==0:
+            del headers[IPID]
+
+        protocols[protocol](us, header, aux+data[IHL:], srcIP)
+
+    else:
+        protocols[protocol](us, header, data[IHL:], srcIP)
+
+
     
-    protocols[protocol](us, header, data[IHL:], srcIP)
-
-
-
 
 def registerIPProtocol(callback,protocol):
     '''
@@ -294,7 +313,6 @@ def sendIPDatagram(dstIP,data,protocol):
     if data is None and protocol is None:
         return False
     
-    
     if ipOpts is None:
         ip_header_init=bytearray([0x45, 0x16])
         ip_header_final=bytearray([128, protocol, 0x00, 0x00])+struct.pack('!I', myIP)+struct.pack('!I', dstIP)
@@ -304,39 +322,57 @@ def sendIPDatagram(dstIP,data,protocol):
        
     
     length=len(data)
-    if length<=MTU-20:
-        ip_header_init+=struct.pack('H', length+(ip_header_init[0] & 0x0F))+struct.pack('H', IPID)+bytearray([0x00, 128])+ip_header_final
-        checksum=struct.pack('!H', chksum(ip_header_init))
+    header_length=(ip_header_init[0] & 0x0F) << 2
+
+    if length<=MTU-header_length:
+
+        ip_header_init+=struct.pack('!H', length+((ip_header_init[0] & 0x0F) << 2))+struct.pack('!H', IPID)+bytearray([0x00]*2)+ip_header_final
+
+        checksum=struct.pack('H', chksum(ip_header_init))        
         ip_header_init[10]=checksum[0]
         ip_header_init[11]=checksum[1]
-        ip_header.append(ip_header_init)
+        
+        ip_header.append(ip_header_init+data)
+    
     else:
-        max_length=(MTU-20)-(MTU-20)%8
+
+        max_length=(MTU-header_length)-(MTU-header_length)%8
         i=0
         offset=0
-        while length-max_length>0:
-            temp=ip_header_init+struct.pack('H', max_length+(ip_header_init[0] & 0x0F))+struct.pack('H', IPID)+bytes([0x20 | offset])+ip_header_final
-            checksum=struct.pack('!H', chksum(temp))
+
+        while (length+8)-max_length>0:
+
+            temp=ip_header_init+struct.pack('!H', max_length+((ip_header_init[0] & 0x0F) << 2))+struct.pack('!H', IPID)+struct.pack('!H', (0x20 << 8) | offset)+ip_header_final
+
+            checksum=struct.pack('H', chksum(temp))
             temp[10]=checksum[0]
             temp[11]=checksum[1]
+
             ip_header.append(temp+data[offset*8:offset*8+max_length])
+
             length-=max_length
-            offset+=max_length/8
+            offset+=max_length//8
+            logging.debug(offset)
             i+=1
-        temp=ip_header_init+struct.pack('H', length+(ip_header_init[0] & 0x0F))+struct.pack('H', IPID)+bytes([offset])+ip_header_final
-        checksum=struct.pack('!H', chksum(temp))
+
+        temp=ip_header_init+struct.pack('!H', length+((ip_header_init[0] & 0x0F)<<2))+struct.pack('!H', IPID)+struct.pack('!H', offset)+ip_header_final
+        
+        checksum=struct.pack('H', chksum(temp))        
         temp[10]=checksum[0]
         temp[11]=checksum[1]
+
         ip_header.append(temp+data[offset*8:offset*8+length])
-    
+            
+
     if (dstIP & netmask) != (myIP & netmask):
         dstMac=ARPResolution(defaultGW)
     else:
         dstMac=ARPResolution(dstIP)
     
     for i in range(0, len(ip_header)):
-        if sendEthernetFrame(ip_header[i], struct.unpack('H', ip_header[i][2:4]), 0x0800, dstMac)==-1:
+        if sendEthernetFrame(ip_header[i], struct.unpack('!H', ip_header[i][2:4])[0], 0x0800, dstMac)==-1:
             return False
+    
     IPID+=1
 
     return True
