@@ -184,21 +184,20 @@ def process_IP_datagram(us,header,data,srcMac):
     if (flags & 0x01)==0 and offset==0:
         protocols[protocol](us, header, data[IHL:], srcIP)
         return
-
-
+    
+    if (flags & 0x01)==0:
+            headers[identification][-1]=1
+    
     if identification not in headers.keys():
         headers[identification]={}
         headers[identification][offset]=data[IHL:]
         headers[identification][-1]=0
-
-        if (flags & 0x01)==0:
-            headers[identification][-1]=1
-
+        
     elif identification in headers.keys():
 
         headers[identification][offset]=data[IHL:]
 
-        if (flags & 0x01)==0 or headers[identification][-1]==1:
+        if headers[identification][-1]==1:
             
             sorted_keys=sorted(headers[identification])
 
