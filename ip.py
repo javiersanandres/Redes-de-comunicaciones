@@ -9,6 +9,7 @@ from ethernet import *
 from arp import *
 from fcntl import ioctl
 import subprocess
+import threading
 SIOCGIFMTU = 0x8921
 SIOCGIFNETMASK = 0x891b
 #Diccionario de protocolos. Las claves con los valores numéricos de protocolos de nivel superior a IP
@@ -17,6 +18,7 @@ protocols={}
 
 #Diccionario de cabeceras en caso de fragmentación
 headers={}
+assemble_Lock=Lock()
 
 #Tamaño mínimo de la cabecera IP
 IP_MIN_HLEN = 20
@@ -185,35 +187,59 @@ def process_IP_datagram(us,header,data,srcMac):
         protocols[protocol](us, header, data[IHL:], srcIP)
         return
     
-    if (flags & 0x01)==0:
-            headers[identification][-1]=1
-    
-    if identification not in headers.keys():
-        headers[identification]={}
-        headers[identification][offset]=data[IHL:]
-        headers[identification][-1]=0
-        
-    elif identification in headers.keys():
+    with assemble_Lock:
 
-        headers[identification][offset]=data[IHL:]
+        if (flags & 0x01)==0:
+                headers[identification][-1]=1
 
-        if headers[identification][-1]==1:
+        if headers.get(identification) is None:
+
+            headers[identification]={}
+            headers[identification][offset]=data[IHL:]
+            headers[identification][-1]=0
+
+            threading.Thread(target=IPDatagram_TimeSender, args=(us, header, protocol, identification, srcIP))
             
+        elif headers.get(identification) is not None:
+
+            headers[identification][offset]=data[IHL:]
+
+            if headers[identification][-1]==1:
+                
+                sorted_keys=sorted(headers[identification])
+
+                offset_controller=len(headers[identification][sorted_keys[1]])
+
+                if sorted_keys[1]==0 and all([(sorted_keys[i+1]-sorted_keys[i])==offset_controller for i in range(1, len(sorted_keys)-1)]):
+                    
+                    aux=bytes()
+                    for i in sorted_keys[1:]:
+                        aux+=headers[identification][i]
+                    del headers[identification]
+
+                    protocols[protocol](us, header, aux, srcIP)
+
+    return
+
+
+def IPDatagram_TimeSender(us, header, protocol, identification, srcIP):
+    time.sleep(10)
+
+    with assemble_Lock:
+        if headers.get(identification) is not None:
             sorted_keys=sorted(headers[identification])
 
-            offset_controller=len(headers[identification][sorted_keys[1]])
-
-            if sorted_keys[1]==0 and all([(sorted_keys[i+1]-sorted_keys[i])==offset_controller for i in range(1, len(sorted_keys)-1)]):
-                
-                aux=bytes()
+            aux=bytes()
+            if sorted_keys[0]==-1:
                 for i in sorted_keys[1:]:
                     aux+=headers[identification][i]
                 del headers[identification]
-
-                protocols[protocol](us, header, aux, srcIP)
-
+            else:
+                for i in sorted_keys:
+                    aux+=headers[identification][i]
+                del headers[identification]
+            protocols[protocol](us, header, aux, srcIP)
     return
-    
 
 def registerIPProtocol(callback,protocol):
     '''
