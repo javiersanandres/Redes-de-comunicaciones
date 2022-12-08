@@ -53,7 +53,7 @@ def process_ICMP_message(us,header,data,srcIp):
         return
     
     if chksum(data) != 0:
-        logging.error('El checksum no es correcto')
+        logging.error('El checksum no es correcto: hay pérdidas de paquetes')
         return
     
     type=data[0]
@@ -73,7 +73,7 @@ def process_ICMP_message(us,header,data,srcIp):
             if (srcIp+icmp_id+icmp_seqnum) in icmp_send_times.keys():
                 RTT=-icmp_send_times[srcIp+icmp_id+icmp_seqnum]
                 RTT+=header.ts.tv_sec+header.ts.tv_usec*(10**(-6))
-                logging.debug('RTT aproximado: {}'.format(RTT))
+                logging.debug('RTT aproximado: %.3lf ms', RTT*10**3)
             else:
                 logging.error('No se ha encontrado esa clave para el diccionario')
 

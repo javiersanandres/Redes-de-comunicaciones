@@ -140,7 +140,7 @@ def process_IP_datagram(us,header,data,srcMac):
     total_length=struct.unpack('!H', data[2:4])[0]
     identification=struct.unpack('!H', data[4:6])[0]
     flags=(data[6] & 0xE0) >> 5
-    offset=((data[6] & 0x1F) << 8 | data[7]) << 3
+    offset=((data[6] & 0x1F) << 8 | data[7])
     time_to_live=data[8]
     protocol=data[9]
     header_checksum=struct.unpack('!H', data[10:12])[0]
@@ -168,15 +168,15 @@ def process_IP_datagram(us,header,data,srcMac):
         return
         
     
-    
-    logging.debug('Longitud de la cabecera IP: {}'.format(IHL))
-    logging.debug('IPID: {}'.format(identification))
-    logging.debug('TTL: {}'.format(time_to_live))
-    logging.debug('DF={} y MF={}'.format(flags & 0x02, flags & 0x01))
-    logging.debug('Valor de offset: {}'.format(offset))
-    logging.debug('IP Origen: {}.{}.{}.{}'.format(data[12],data[13], data[14], data[15]))
-    logging.debug('IP Destino: {}.{}.{}.{}'.format(data[16],data[17], data[18], data[19]))
-    logging.debug('Protocolo: {}'.format(protocol))
+    if (flags & 0x01)==0:
+        logging.debug('Longitud de la cabecera IP: {}'.format(IHL))
+        logging.debug('IPID: {}'.format(identification))
+        logging.debug('TTL: {}'.format(time_to_live))
+        logging.debug('DF={} y MF={}'.format(flags & 0x02, flags & 0x01))
+        logging.debug('Valor de offset: {}'.format(offset))
+        logging.debug('IP Origen: {}.{}.{}.{}'.format(data[12],data[13], data[14], data[15]))
+        logging.debug('IP Destino: {}.{}.{}.{}'.format(data[16],data[17], data[18], data[19]))
+        logging.debug('Protocolo: {}'.format(protocol))
 
 
     if protocol not in protocols.keys():
@@ -187,22 +187,29 @@ def process_IP_datagram(us,header,data,srcMac):
         protocols[protocol](us, header, data[IHL:], srcIP)
         return
     
+    IPDatagram_reassemble(us, header, protocol, identification, offset << 3, flags & 0x01, data[IHL:], srcIP)
+
+
+def IPDatagram_reassemble(us, header, protocol, identification, offset, MF, data, srcIP):
     with assemble_Lock:
 
-        if (flags & 0x01)==0:
+        if MF==0 and headers.get(identification):
                 headers[identification][-1]=1
 
         if headers.get(identification) is None:
 
             headers[identification]={}
-            headers[identification][offset]=data[IHL:]
+            headers[identification][offset]=data
             headers[identification][-1]=0
 
-            threading.Thread(target=IPDatagram_TimeSender, args=(us, header, protocol, identification, srcIP))
+            if MF==0:
+                headers[identification][-1]=1
+
+            threading.Thread(target=IPDatagram_TimeSender, args=(us, header, protocol, identification, srcIP)).start()
             
         elif headers.get(identification) is not None:
 
-            headers[identification][offset]=data[IHL:]
+            headers[identification][offset]=data
 
             if headers[identification][-1]==1:
                 
@@ -219,10 +226,11 @@ def process_IP_datagram(us,header,data,srcMac):
 
                     protocols[protocol](us, header, aux, srcIP)
 
-    return
-
 
 def IPDatagram_TimeSender(us, header, protocol, identification, srcIP):
+    
+    logging.debug('Esperando a que lleguen todos los paquetes correspondientes al IPID={}'.format(identification))
+    
     time.sleep(10)
 
     with assemble_Lock:
@@ -239,7 +247,7 @@ def IPDatagram_TimeSender(us, header, protocol, identification, srcIP):
                     aux+=headers[identification][i]
                 del headers[identification]
             protocols[protocol](us, header, aux, srcIP)
-    return
+
 
 def registerIPProtocol(callback,protocol):
     '''
@@ -307,7 +315,7 @@ def initIP(interface,opts=None):
     if opts is not None:
         ipOpts=opts
         length=len(ipOpts)
-        if length%4 or length>40:
+        if length % 4 or length>40:
             logging.error('Tamaño de opciones inválido')
             return False
     else:

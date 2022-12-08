@@ -92,8 +92,6 @@ def processARPRequest(data:bytes,MAC:bytes)->None:
         Retorno: Ninguno
     '''
 
-    logging.debug('Ejecutando processARPRequest')
-    #TODO implementar aquí
     global myIP
     
     if (data is None) or (MAC is None):
@@ -107,18 +105,9 @@ def processARPRequest(data:bytes,MAC:bytes)->None:
     if macorg != MAC:
         return
     
-    if ipdest !=struct.pack('!I',myIP):
-        
-        logging.debug('--------------------------')
-        logging.debug('---Mi comparacion de IPs---')
-        logging.debug(data[18:22])
-        logging.debug(struct.pack('!I',myIP))
-        logging.debug('--------------------------')
-        
+    if ipdest !=struct.pack('!I',myIP):        
         return
     
-    
-        
     else:
         frame=createARPReply(struct.unpack('!I',iporg)[0],MAC)
         if sendEthernetFrame(frame, len(frame), 0x0806 ,MAC) <0:
@@ -153,8 +142,7 @@ def processARPReply(data:bytes,MAC:bytes)->None:
             -MAC: dirección MAC origen extraída por el nivel Ethernet
         Retorno: Ninguno
     '''
-    global requestedIP,resolvedMAC,awaitingResponse,cache
-    logging.debug('Ejecutando processARPReply')    
+    global requestedIP,resolvedMAC,awaitingResponse,cache    
     #TODO implementar aquí
     global myIP
     
@@ -201,7 +189,6 @@ def createARPRequest(ip:int) -> bytes:
         return 
     
     frame = bytes()
-    logging.debug('Ejecutando createARPRequest')
     #TODO implementar aqui
     frame=ARPHeader+ bytes([0x00,0x01])+myMAC+struct.pack('!I',myIP)+bytes([0x00]*6)+struct.pack('!I',ip)
 
@@ -223,7 +210,6 @@ def createARPReply(IP:int ,MAC:bytes) -> bytes:
         return 
     
     frame = bytes()
-    logging.debug('Ejecutando createARPReply')
     #TODO implementar aqui
 
     frame=ARPHeader+ bytes([0x00,0x02])+myMAC+struct.pack('!I',myIP)+MAC+struct.pack('!I',IP)
@@ -251,7 +237,6 @@ def process_arp_frame(us:ctypes.c_void_p,header:pcap_pkthdr,data:bytes,srcMac:by
             -srcMac: MAC origen de la trama Ethernet que se ha recibido
         Retorno: Ninguno
     '''
-    logging.debug('Ejecutando process_arp_frame')
     #TODO implementar aquí
     
     if (data is None) or (srcMac is None):
@@ -288,7 +273,6 @@ def initARP(interface:str) -> int:
             -Marcar la variable de nivel ARP inicializado a True
     '''
     global myIP,myMAC,arpInitialized
-    logging.debug('Ejecutando initARP')
     #TODO implementar aquí
     
     if not interface:
@@ -331,7 +315,6 @@ def ARPResolution(ip:int) -> bytes:
             Como estas variables globales se leen y escriben concurrentemente deben ser protegidas con un Lock
     '''
     global requestedIP,awaitingResponse,resolvedMAC
-    logging.debug('Ejecutando ARPResolution')
     
     if ip<0:
         return None

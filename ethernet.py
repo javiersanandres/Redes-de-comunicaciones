@@ -65,7 +65,6 @@ def process_Ethernet_frame(us:ctypes.c_void_p,header:pcap_pkthdr,data:bytes) -> 
         Retorno:
             -Ninguno
     '''
-    logging.debug('Trama nueva. Ejecutando Process_Ethernet_frame')
     global macAddress
     #TODO: Implementar aquí el código que procesa una trama Ethernet en recepción
 
@@ -157,7 +156,6 @@ def registerCallback(callback_func: Callable[[ctypes.c_void_p,pcap_pkthdr,bytes]
     '''
     global upperProtos
     #upperProtos es el diccionario que relaciona función de callback y ethertype
-    logging.debug('Ejecutando registerCallback')
     
     if (callback_func is None) or (ethertype<0):
         return
@@ -183,7 +181,6 @@ def startEthernetLevel(interface:str) -> int:
     global macAddress,handle,levelInitialized,recvThread
     errbuf=bytearray()
     handle = None
-    logging.debug('Ejecutando startEthernetLevel')
     #TODO: implementar aquí la inicialización de la interfaz y de las variables globales
 
     if not interface:
@@ -193,7 +190,7 @@ def startEthernetLevel(interface:str) -> int:
         return -1
     else:
         macAddress=getHwAddr(interface)
-        handle=pcap_open_live(interface,ETH_FRAME_MAX, PROMISC, TO_MS, errbuf)
+        handle=pcap_open_live(interface, ETH_FRAME_MAX, PROMISC, TO_MS, errbuf)
         if handle is None:
             print('Error en pcap_open_live')
             return -1
@@ -219,7 +216,6 @@ def stopEthernetLevel()->int:
         Argumentos: Ninguno
         Retorno: 0 si todo es correcto y -1 en otro caso
     '''
-    logging.debug('Ejecutando stopEthernetLevel')
 
     if levelInitialized != True:
         return -1
@@ -249,7 +245,6 @@ def sendEthernetFrame(data:bytes,length:int,etherType:int,dstMac:bytes) -> int:
         Retorno: 0 si todo es correcto, -1 en otro caso
     '''
     global macAddress,handle
-    logging.debug('Ejecutando sendEthernetFrame')
     
     if (data is None) or (length<0) or (etherType<0) or (dstMac is None):
         return -1
