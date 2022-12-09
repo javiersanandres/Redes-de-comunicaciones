@@ -133,6 +133,8 @@ def process_IP_datagram(us,header,data,srcMac):
     if header is None or data is None or srcMac is None:
         logging.error('La cabecera, el datagrama o la mac de origen son None')
         return
+
+
     
     version=(data[0] & 0xF0) >> 4  
     IHL= (data[0] & 0x0F) << 2
@@ -168,12 +170,13 @@ def process_IP_datagram(us,header,data,srcMac):
         return
         
     
-    if (flags & 0x01)==0:
+    if offset==0:
         logging.debug('Longitud de la cabecera IP: {}'.format(IHL))
         logging.debug('IPID: {}'.format(identification))
         logging.debug('TTL: {}'.format(time_to_live))
         logging.debug('DF={} y MF={}'.format(flags & 0x02, flags & 0x01))
-        logging.debug('Valor de offset: {}'.format(offset))
+        logging.debug('Valor de offset (sin multiplicar por 8): {}'.format(offset))
+        logging.debug('Valor de offset (multiplicado por 8): {}'.format(offset << 3))
         logging.debug('IP Origen: {}.{}.{}.{}'.format(data[12],data[13], data[14], data[15]))
         logging.debug('IP Destino: {}.{}.{}.{}'.format(data[16],data[17], data[18], data[19]))
         logging.debug('Protocolo: {}'.format(protocol))
@@ -193,60 +196,77 @@ def process_IP_datagram(us,header,data,srcMac):
 def IPDatagram_reassemble(us, header, protocol, identification, offset, MF, data, srcIP):
     with assemble_Lock:
 
-        if MF==0 and headers.get(identification):
-                headers[identification][-1]=1
+        if MF==0 and headers.get((identification, srcIP)):
+                headers[(identification, srcIP)][-1]=1
 
-        if headers.get(identification) is None:
+        if headers.get((identification, srcIP)) is None:
 
-            headers[identification]={}
-            headers[identification][offset]=data
-            headers[identification][-1]=0
+            headers[(identification, srcIP)]={}
+            headers[(identification, srcIP)][offset]=data
+            headers[(identification, srcIP)][-1]=0
 
             if MF==0:
-                headers[identification][-1]=1
+                headers[(identification, srcIP)][-1]=1
 
-            threading.Thread(target=IPDatagram_TimeSender, args=(us, header, protocol, identification, srcIP)).start()
+            threading.Thread(target=IPDatagram_TimeSender, args=(identification, srcIP)).start()
             
-        elif headers.get(identification) is not None:
+        elif headers.get((identification, srcIP)) is not None:
 
-            headers[identification][offset]=data
+            headers[(identification, srcIP)][offset]=data
 
-            if headers[identification][-1]==1:
+            if headers[(identification, srcIP)][-1]==1:
                 
-                sorted_keys=sorted(headers[identification])
+                sorted_keys=sorted(headers[(identification, srcIP)])
 
-                offset_controller=len(headers[identification][sorted_keys[1]])
+                offset_controller=len(headers[(identification, srcIP)][sorted_keys[1]])
 
                 if sorted_keys[1]==0 and all([(sorted_keys[i+1]-sorted_keys[i])==offset_controller for i in range(1, len(sorted_keys)-1)]):
                     
                     aux=bytes()
                     for i in sorted_keys[1:]:
-                        aux+=headers[identification][i]
-                    del headers[identification]
+                        aux+=headers[(identification, srcIP)][i]
+                    del headers[(identification, srcIP)]
 
                     protocols[protocol](us, header, aux, srcIP)
 
 
-def IPDatagram_TimeSender(us, header, protocol, identification, srcIP):
-    
-    logging.debug('Esperando a que lleguen todos los paquetes correspondientes al IPID={}'.format(identification))
-    
-    time.sleep(10)
+def IPDatagram_TimeSender(identification, srcIP):
+    srcIP_format=struct.pack('!I', srcIP)
+    index=(identification, srcIP)
 
     with assemble_Lock:
-        if headers.get(identification) is not None:
-            sorted_keys=sorted(headers[identification])
+        length_o=len(headers.get(index))
+    
+    time.sleep(2)
 
-            aux=bytes()
-            if sorted_keys[0]==-1:
-                for i in sorted_keys[1:]:
-                    aux+=headers[identification][i]
-                del headers[identification]
+    with assemble_Lock:
+        if headers.get(index) is not None:
+            length_f=len(headers.get(index))
+        else:
+            return
+
+    while length_o != length_f:
+
+        with assemble_Lock:
+            if headers.get(index) is not None:
+                length_o=len(headers.get(index))
             else:
-                for i in sorted_keys:
-                    aux+=headers[identification][i]
-                del headers[identification]
-            protocols[protocol](us, header, aux, srcIP)
+                return
+    
+        time.sleep(2)
+
+        with assemble_Lock:
+            if headers.get(index) is not None:
+                length_f=len(headers.get(index))
+            else:
+                return
+
+    logging.debug('Esperando a que lleguen el resto de fragmentos para el IPID = {} e IP = {}.{}.{}.{}'.format(identification, srcIP_format[0], srcIP_format[1], srcIP_format[2], srcIP_format[3]))
+
+    with assemble_Lock:
+        if headers.get(index) is not None:
+            logging.debug('Faltan fragmentos: datagrama descartado')
+            del headers[index]
 
 
 def registerIPProtocol(callback,protocol):
@@ -353,33 +373,25 @@ def sendIPDatagram(dstIP,data,protocol):
           
     '''
     logging.debug('Enviando datagrama IP...')
-    ip_header_init = bytearray()
-    temp=bytearray()
+    ip_header_temp = bytearray()
     ip_header=[]
        
     if data is None or protocol is None:
         return False
     
     if ipOpts is None:
-        ip_header_init=bytearray([0x45, 0x16])
-        ip_header_final=bytearray([128, protocol, 0x00, 0x00])+struct.pack('!I', myIP)+struct.pack('!I', dstIP)
-    else:
-        ip_header_init=bytearray([0x40 | (20+len(ipOpts))/4, 0x16])
-        ip_header_final=bytearray([128, protocol, 0x00, 0x00])+struct.pack('!I', myIP)+struct.pack('!I', dstIP)+ipOpts
-       
+        ipOpts=bytes()       
     
     length=len(data)
-    header_length=(ip_header_init[0] & 0x0F) << 2
+    header_length=20+len(ipOpts)
 
     if length<=MTU-header_length:
+        ip_header_temp=struct.pack('!BBHHHBBHII', 0x40 | header_length//4, 0x16, length+header_length, IPID, 0, 128, protocol, 0, myIP, dstIP)+ipOpts
 
-        ip_header_init+=struct.pack('!H', length+((ip_header_init[0] & 0x0F) << 2))+struct.pack('!H', IPID)+bytearray([0x00]*2)+ip_header_final
-
-        checksum=struct.pack('H', chksum(ip_header_init))        
-        ip_header_init[10]=checksum[0]
-        ip_header_init[11]=checksum[1]
+        checksum=struct.unpack('H', struct.pack('!H', chksum(ip_header_temp)))[0]        
         
-        ip_header.append(ip_header_init+data)
+        ip_header_temp=struct.pack('!BBHHHBBHII', 0x40 | header_length//4, 0x16, length+header_length, IPID, 0, 128, protocol, checksum, myIP, dstIP)+ipOpts
+        ip_header.append(ip_header_temp+data)
     
     else:
 
@@ -388,26 +400,25 @@ def sendIPDatagram(dstIP,data,protocol):
         offset=0
 
         while length-max_length>0:
+            ip_header_temp=struct.pack('!BBHHHBBHII', 0x40 | header_length//4, 0x16, max_length+header_length, IPID, (0x20 << 8) | offset, 128, protocol, 0, myIP, dstIP)+ipOpts
 
-            temp=ip_header_init+struct.pack('!H', max_length+((ip_header_init[0] & 0x0F) << 2))+struct.pack('!H', IPID)+struct.pack('!H', (0x20 << 8) | offset)+ip_header_final
+            checksum=struct.unpack('H', struct.pack('!H', chksum(ip_header_temp)))[0]
+            
+            ip_header_temp=struct.pack('!BBHHHBBHII', 0x40 | header_length//4, 0x16, max_length+header_length, IPID, (0x20 << 8) | offset, 128, protocol, checksum, myIP, dstIP)+ipOpts
 
-            checksum=struct.pack('H', chksum(temp))
-            temp[10]=checksum[0]
-            temp[11]=checksum[1]
-
-            ip_header.append(temp+data[offset*8:offset*8+max_length])
+            ip_header.append(ip_header_temp+data[offset*8:offset*8+max_length])
 
             length-=max_length
             offset+=max_length//8
             i+=1
 
-        temp=ip_header_init+struct.pack('!H', length+((ip_header_init[0] & 0x0F)<<2))+struct.pack('!H', IPID)+struct.pack('!H', offset)+ip_header_final
+        ip_header_temp=struct.pack('!BBHHHBBHII', 0x40 | header_length//4, 0x16, length+header_length, IPID, offset, 128, protocol, 0, myIP, dstIP)+ipOpts
         
-        checksum=struct.pack('H', chksum(temp))        
-        temp[10]=checksum[0]
-        temp[11]=checksum[1]
+        checksum=struct.unpack('H', struct.pack('!H', chksum(ip_header_temp)))[0]       
+   
+        ip_header_temp=struct.pack('!BBHHHBBHII', 0x40 | header_length//4, 0x16, length+header_length, IPID, offset, 128, protocol, checksum, myIP, dstIP)+ipOpts
 
-        ip_header.append(temp+data[offset*8:offset*8+length])
+        ip_header.append(ip_header_temp+data[offset*8:offset*8+length])
             
 
     if (dstIP & netmask) != (myIP & netmask):
