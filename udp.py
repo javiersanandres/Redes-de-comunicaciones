@@ -51,9 +51,7 @@ def process_UDP_datagram(us,header,data,srcIP):
     if header is None or data is None:
         return
     
-    srcPort=struct.unpack('!H', data[0:2])[0]
-    dstPort=struct.unpack('!H', data[2:4])[0]
-    length=struct.unpack('!H', data[4:6])[0]
+    srcPort, dstPort, length=struct.unpack('!HHH', data[0:6])[0:3]
     logging.debug('Puerto origen: {}'.format(srcPort))
     logging.debug('Puerto destino: {}'.format(dstPort))
 
@@ -90,7 +88,8 @@ def sendUDPDatagram(data,dstPort,dstIP):
         return False
     
     srcPort=getUDPSourcePort()
-    udp_datagram=struct.pack('!H', srcPort)+struct.pack('!H', dstPort)+struct.pack('!H', 8+len(data))+bytes([0x00]*2)+data
+    udp_datagram=struct.pack('!HHHH', srcPort, dstPort, 8+len(data), 0)+data
+    
     if sendIPDatagram(dstIP, udp_datagram, 17)==False:
         return False
     

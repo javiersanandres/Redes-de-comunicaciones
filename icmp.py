@@ -53,13 +53,10 @@ def process_ICMP_message(us,header,data,srcIp):
         return
     
     if chksum(data) != 0:
-        logging.error('El checksum no es correcto: hay pérdidas de paquetes')
+        logging.error('El checksum no es correcto')
         return
     
-    type=data[0]
-    code=data[1]
-    icmp_id=struct.unpack('!H', data[4:6])[0]
-    icmp_seqnum=struct.unpack('!H', data[6:8])[0]
+    type, code, icmp_id, icmp_seqnum=struct.unpack('!BBHH', data[0:2]+data[4:8])[0:4]
     logging.debug('Valor de tipo: {}'.format(type))
     logging.debug('Código: {}'.format(code))
     
@@ -109,16 +106,16 @@ def sendICMPMessage(data,type,code,icmp_id,icmp_seqnum,dstIP):
           
     '''
     logging.debug('Enviando mensaje ICMP...')
-    icmp_message = bytearray()
+    icmp_message = bytes()
     
     
     if type==ICMP_ECHO_REPLY_TYPE or type==ICMP_ECHO_REQUEST_TYPE:
         
-        icmp_message=bytearray([type, code])+bytearray([0x00]*2)+struct.pack('!H', icmp_id)+struct.pack('!H', icmp_seqnum)+data
+        icmp_message=bytearray(struct.pack('!BBHHH', type, code, 0, icmp_id, icmp_seqnum))+data
+
         checksum=struct.pack('H', chksum(icmp_message))
         
-        icmp_message[2]=checksum[0]
-        icmp_message[3]=checksum[1]
+        icmp_message[2:4]=checksum[0:2]
         
         with timeLock:
             if type==ICMP_ECHO_REQUEST_TYPE:
@@ -128,8 +125,8 @@ def sendICMPMessage(data,type,code,icmp_id,icmp_seqnum,dstIP):
         logging.error('Tipo no soportado')
         return False
 
-    if len(icmp_message)%2:
-        icmp_message+=bytes([0x00])
+    if len(icmp_message) % 2:
+        icmp_message+=bytes([0])
         
     if sendIPDatagram(dstIP, icmp_message, 1)==False:
         logging.error('Error enviando datagrama IP')
