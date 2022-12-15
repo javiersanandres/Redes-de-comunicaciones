@@ -184,10 +184,10 @@ def process_IP_datagram(us,header,data,srcMac):
         return
 
     if (flags & 0x01)==0 and offset==0:
-        protocols[protocol](us, header, data[IHL:], srcIP)
+        protocols[protocol](us, header, data[IHL:total_length], srcIP)
         return
     
-    reassembleIPDatagram(us, header, protocol, identification, offset << 3, flags & 0x01, data[IHL:], srcIP)
+    reassembleIPDatagram(us, header, protocol, identification, offset << 3, flags & 0x01, data[IHL:total_length], srcIP)
 
 
 def reassembleIPDatagram(us, header, protocol, identification, offset, MF, data, srcIP):

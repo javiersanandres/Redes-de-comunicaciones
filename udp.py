@@ -54,13 +54,7 @@ def process_UDP_datagram(us,header,data,srcIP):
     srcPort, dstPort, length=struct.unpack('!HHH', data[0:6])[0:3]
     logging.debug('Puerto origen: {}'.format(srcPort))
     logging.debug('Puerto destino: {}'.format(dstPort))
-
-    string=""
-    for i in range(8, len(data)):
-        string+=chr(data[i])
-    logging.debug('{}\n\n'.format(string))
-
-    #logging.debug('Datos contenidos:{}\n\n'.format(data[8:length].hex()))
+    logging.debug('Datos contenidos:{}\n\n'.format(data[8:length].hex()))
     return
 
 
